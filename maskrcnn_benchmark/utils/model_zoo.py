@@ -2,15 +2,27 @@
 import os
 import sys
 
+# urlparse always tu stdlib (PyTorch 2.x da bo re-export urlparse)
+from urllib.parse import urlparse
 
+# download_url_to_file: PyTorch 2.x = ten public; PyTorch < 1.6 = _download_url_to_file
 try:
-    from torch.hub import _download_url_to_file
-    from torch.hub import urlparse
+    from torch.hub import download_url_to_file as _download_url_to_file
+except ImportError:
+    try:
+        from torch.hub import _download_url_to_file
+    except ImportError:
+        from torch.utils.model_zoo import _download_url_to_file
+
+# HASH_REGEX: van con o torch.hub trong PyTorch 2.x
+try:
     from torch.hub import HASH_REGEX
 except ImportError:
-    from torch.utils.model_zoo import _download_url_to_file
-    from torch.utils.model_zoo import urlparse
-    from torch.utils.model_zoo import HASH_REGEX
+    try:
+        from torch.utils.model_zoo import HASH_REGEX
+    except ImportError:
+        import re
+        HASH_REGEX = re.compile(r'-([a-f0-9]*)\.')
 
 from maskrcnn_benchmark.utils.comm import is_main_process
 from maskrcnn_benchmark.utils.comm import synchronize

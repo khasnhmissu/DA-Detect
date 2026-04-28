@@ -376,7 +376,7 @@ class COCOResults(object):
         res = self.results[iou_type]
         metrics = COCOResults.METRICS[iou_type]
         #TODO:jinlong
-        if len(catIds) is 1:
+        if len(catIds) == 1:
             res[catIds[0]] = {}
             for idx, metric in enumerate(metrics):
                 res[catIds[0]][metric] = s[idx]

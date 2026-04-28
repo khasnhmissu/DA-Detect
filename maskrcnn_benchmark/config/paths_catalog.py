@@ -222,6 +222,39 @@ class DatasetCatalog(object):
                 "img_dir": 'watercolor/JPEGImages',
                 "ann_file": 'watercolor/instances_test.json',
         },
+
+        # ================================================================
+        # FusionDA comparison: Cityscapes (source) <-> Foggy Cityscapes (target)
+        # 2 classes (person, car). Paths are relative to DATA_DIR="datasets".
+        # ================================================================
+        "fusionda_source_train_cocostyle": {
+            "img_dir": "source_real/source_real/train/images",
+            "ann_file": "annotations/source_train.json",
+        },
+        "fusionda_source_val_cocostyle": {
+            "img_dir": "source_real/source_real/val/images",
+            "ann_file": "annotations/source_val.json",
+        },
+        "fusionda_target_train_cocostyle": {
+            "img_dir": "target_real/target_real/train/images",
+            "ann_file": "annotations/target_train.json",
+        },
+        "fusionda_target_val_cocostyle": {
+            "img_dir": "target_real/target_real/val/images",
+            "ann_file": "annotations/target_val.json",
+        },
+        "fusionda_rainy_train_cocostyle": {
+            "img_dir": "rainy_real/train/images",
+            "ann_file": "annotations/rainy_train.json",
+        },
+        "fusionda_source_test_cocostyle": {
+            "img_dir": "source_test/source_test/val/images",
+            "ann_file": "annotations/source_test.json",
+        },
+        "fusionda_target_test_cocostyle": {
+            "img_dir": "target_test/target_test/val/images",
+            "ann_file": "annotations/target_test.json",
+        },
     }
 
     @staticmethod

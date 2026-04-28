@@ -80,12 +80,20 @@ class DomainAdaptationModule_triplet(torch.nn.Module):
 
         self.cfg = cfg.clone()
 
-        stage_index = 4
-        stage2_relative_factor = 2 ** (stage_index - 1)
-        res2_out_channels = cfg.MODEL.RESNETS.RES2_OUT_CHANNELS
-        num_ins_inputs = cfg.MODEL.ROI_BOX_HEAD.MLP_HEAD_DIM if cfg.MODEL.BACKBONE.CONV_BODY.startswith('V') else res2_out_channels * stage2_relative_factor
-
-        self.resnet_backbone = cfg.MODEL.BACKBONE.CONV_BODY.startswith('R')
+        # FPN: RoI head dung FPN2MLPFeatureExtractor -> output 2D (N, MLP_HEAD_DIM).
+        # C4 : RoI head dung ResNet50Conv5ROIFeatureExtractor -> output 4D (N, C, 7, 7), can avgpool.
+        is_fpn = 'FPN' in cfg.MODEL.BACKBONE.CONV_BODY
+        if is_fpn:
+            num_ins_inputs = cfg.MODEL.ROI_BOX_HEAD.MLP_HEAD_DIM
+            self.resnet_backbone = False
+        else:
+            stage_index = 4
+            stage2_relative_factor = 2 ** (stage_index - 1)
+            res2_out_channels = cfg.MODEL.RESNETS.RES2_OUT_CHANNELS
+            num_ins_inputs = (cfg.MODEL.ROI_BOX_HEAD.MLP_HEAD_DIM
+                              if cfg.MODEL.BACKBONE.CONV_BODY.startswith('V')
+                              else res2_out_channels * stage2_relative_factor)
+            self.resnet_backbone = cfg.MODEL.BACKBONE.CONV_BODY.startswith('R')
         self.avgpool = nn.AvgPool2d(kernel_size=7, stride=7)
         
         self.img_weight = cfg.MODEL.DA_HEADS.DA_IMG_LOSS_WEIGHT
@@ -362,12 +370,20 @@ class DomainAdaptationModule(torch.nn.Module):
 
         self.cfg = cfg.clone()
 
-        stage_index = 4
-        stage2_relative_factor = 2 ** (stage_index - 1)
-        res2_out_channels = cfg.MODEL.RESNETS.RES2_OUT_CHANNELS
-        num_ins_inputs = cfg.MODEL.ROI_BOX_HEAD.MLP_HEAD_DIM if cfg.MODEL.BACKBONE.CONV_BODY.startswith('V') else res2_out_channels * stage2_relative_factor
-        
-        self.resnet_backbone = cfg.MODEL.BACKBONE.CONV_BODY.startswith('R')
+        # FPN: RoI head dung FPN2MLPFeatureExtractor -> output 2D, khong can avgpool.
+        # C4 : RoI head dung ResNet50Conv5ROIFeatureExtractor -> output 4D, can avgpool.
+        is_fpn = 'FPN' in cfg.MODEL.BACKBONE.CONV_BODY
+        if is_fpn:
+            num_ins_inputs = cfg.MODEL.ROI_BOX_HEAD.MLP_HEAD_DIM
+            self.resnet_backbone = False
+        else:
+            stage_index = 4
+            stage2_relative_factor = 2 ** (stage_index - 1)
+            res2_out_channels = cfg.MODEL.RESNETS.RES2_OUT_CHANNELS
+            num_ins_inputs = (cfg.MODEL.ROI_BOX_HEAD.MLP_HEAD_DIM
+                              if cfg.MODEL.BACKBONE.CONV_BODY.startswith('V')
+                              else res2_out_channels * stage2_relative_factor)
+            self.resnet_backbone = cfg.MODEL.BACKBONE.CONV_BODY.startswith('R')
         self.avgpool = nn.AvgPool2d(kernel_size=7, stride=7)
         
         self.img_weight = cfg.MODEL.DA_HEADS.DA_IMG_LOSS_WEIGHT

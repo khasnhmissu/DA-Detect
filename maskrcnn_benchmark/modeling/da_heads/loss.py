@@ -68,33 +68,19 @@ class DALossComputation(object):
             da_consist_loss (Tensor)
         """
         masks = self.prepare_masks(targets)
-        masks = torch.cat(masks, dim=0)
+        masks = torch.cat(masks, dim=0)  # (N,) bool
 
-        da_img_flattened = []
-        da_img_labels_flattened = []
-
-        # for each feature level, permute the outputs to make them be in the
-        # same format as the labels. Note that the labels are computed for
-        # all feature levels concatenated, so we keep the same representation
-        # for the image-level domain alignment
+        # Patch cho FPN multi-level: tinh BCE rieng moi level roi trung binh.
+        da_img_loss = 0.0
         for da_img_per_level in da_img:
             N, A, H, W = da_img_per_level.shape
-            da_img_per_level = da_img_per_level.permute(0, 2, 3, 1)
-            da_img_label_per_level = torch.zeros_like(da_img_per_level, dtype=torch.float32)
-            da_img_label_per_level[masks, :] = 1
-
-            da_img_per_level = da_img_per_level.reshape(N, -1)
-            da_img_label_per_level = da_img_label_per_level.reshape(N, -1)
-            
-            da_img_flattened.append(da_img_per_level)
-            da_img_labels_flattened.append(da_img_label_per_level)
-            
-        da_img_flattened = torch.cat(da_img_flattened, dim=0)
-        da_img_labels_flattened = torch.cat(da_img_labels_flattened, dim=0)
-        
-        da_img_loss = F.binary_cross_entropy_with_logits(
-            da_img_flattened, da_img_labels_flattened
-        )
+            label = masks.view(N, 1, 1, 1).expand(N, A, H, W).to(
+                dtype=da_img_per_level.dtype
+            )
+            da_img_loss = da_img_loss + F.binary_cross_entropy_with_logits(
+                da_img_per_level, label
+            )
+        da_img_loss = da_img_loss / len(da_img)
         da_ins_loss = F.binary_cross_entropy_with_logits(
             torch.squeeze(da_ins), da_ins_labels.type(torch.cuda.FloatTensor)
         )
@@ -138,34 +124,22 @@ class DALossComputation_Component(object):
     
 
     def da_img_loss(self, da_img, targets):
-        da_img_flattened = []
-        da_img_labels_flattened = []
-        
+        # Patch cho FPN multi-level: cac feature levels co (H, W) khac nhau,
+        # khong the cat thanh 1 tensor. Tinh BCE rieng moi level roi trung binh.
         masks = self.prepare_masks(targets)
-        masks = torch.cat(masks, dim=0)
-        # for each feature level, permute the outputs to make them be in the
-        # same format as the labels. Note that the labels are computed for
-        # all feature levels concatenated, so we keep the same representation
-        # for the image-level domain alignment
+        masks = torch.cat(masks, dim=0)  # (N,) bool: True = source
+
+        total_loss = 0.0
         for da_img_per_level in da_img:
             N, A, H, W = da_img_per_level.shape
-            da_img_per_level = da_img_per_level.permute(0, 2, 3, 1)
-            da_img_label_per_level = torch.zeros_like(da_img_per_level, dtype=torch.float32)
-            da_img_label_per_level[masks, :] = 1
+            # label same shape as logits: 1 for source images, 0 for target
+            label = masks.view(N, 1, 1, 1).expand(N, A, H, W).to(
+                dtype=da_img_per_level.dtype
+            )
+            level_loss = F.binary_cross_entropy_with_logits(da_img_per_level, label)
+            total_loss = total_loss + level_loss
 
-            da_img_per_level = da_img_per_level.reshape(N, -1)
-            da_img_label_per_level = da_img_label_per_level.reshape(N, -1)
-            
-            da_img_flattened.append(da_img_per_level)
-            da_img_labels_flattened.append(da_img_label_per_level)
-            
-        da_img_flattened = torch.cat(da_img_flattened, dim=0)
-        da_img_labels_flattened = torch.cat(da_img_labels_flattened, dim=0)
-        
-        da_img_loss = F.binary_cross_entropy_with_logits(
-            da_img_flattened, da_img_labels_flattened
-        )
-        return da_img_loss
+        return total_loss / len(da_img)
     
     def da_ins_loss(self, da_ins, da_ins_labels):
         da_ins_loss = F.binary_cross_entropy_with_logits(

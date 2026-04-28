@@ -87,19 +87,20 @@ class GeneralizedRCNN(nn.Module):
 
                     if self.da_heads_triplet:
 
-                        fea_s = []
-                        fea_p = []
-                        fea_n = []
-                        fea_s.append(features[0][0:1].clone())
-                        fea_p.append(features[0][1:2].clone())
-                        fea_n.append(features[0][2:3].clone())
+                        # Anh duoc concat theo thu tu: source(B) + target(B) + negative(B).
+                        # Code goc gia dinh B=1; voi IMS_PER_BATCH > 1 phai slice theo B.
+                        B = features[0].shape[0] // 3
+
+                        # Slice TAT CA feature levels (cho FPN tuong thich, C4 chi co 1 level)
+                        fea_s = [f[0:B].clone() for f in features]
+                        fea_p = [f[B:2*B].clone() for f in features]
+                        fea_n = [f[2*B:3*B].clone() for f in features]
                         da_img_fea_set = [fea_s, fea_p, fea_n]
 
-                        ### the original components
-                        ori_features = []
-                        ori_features.append(features[0][0:2].clone())
-                        ori_proposals = proposals[0:2]
-                        ori_targets = targets[0:2]
+                        ### the original components: source + target (no negative)
+                        ori_features = tuple(f[0:2*B].clone() for f in features)
+                        ori_proposals = proposals[0:2*B]
+                        ori_targets = targets[0:2*B]
 
                         x, result, detector_losses, da_ins_feas, da_ins_labels = self.roi_heads(ori_features, ori_proposals, ori_targets)
                                                                                         
@@ -124,14 +125,17 @@ class GeneralizedRCNN(nn.Module):
                     elif self.da_heads:
 
                         x, result, detector_losses, da_ins_feas, da_ins_labels = self.roi_heads(features, proposals, targets)
-                        
+
                         da_losses = self.da_heads(features, da_ins_feas, da_ins_labels, targets)
 
                         # print("this code working-header-noriginal!")
 
+                    else:
+                        # Source-only training (Faster R-CNN thuan, khong DA, khong triplet)
+                        x, result, detector_losses, da_ins_feas, da_ins_labels = self.roi_heads(features, proposals, targets)
 
 
-                else:# Original Loss
+                else:# Eval mode
 
                     x, result, detector_losses, da_ins_feas, da_ins_labels = self.roi_heads(features, proposals, targets)
         

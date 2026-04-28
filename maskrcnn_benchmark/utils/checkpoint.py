@@ -49,6 +49,29 @@ class Checkpointer(object):
         torch.save(data, save_file)
         self.tag_last_checkpoint(save_file)
 
+        # Auto-cleanup intermediate checkpoint cu (model_XXXXXXX.pth) khi luu mot
+        # cai moi, de tranh tran disk. Luon giu model_final.pth.
+        self._cleanup_old_intermediates(keep=os.path.basename(save_file))
+
+    def _cleanup_old_intermediates(self, keep):
+        """Xoa cac file model_XXXXXXX.pth trong save_dir tru file `keep` va model_final.pth."""
+        if not self.save_dir or not os.path.isdir(self.save_dir):
+            return
+        for fname in os.listdir(self.save_dir):
+            if not fname.endswith(".pth"):
+                continue
+            if fname == keep or fname == "model_final.pth":
+                continue
+            # Chi xoa file co dang model_<digits>.pth (intermediate)
+            stem = fname[:-4]  # remove .pth
+            if stem.startswith("model_") and stem[6:].isdigit():
+                full = os.path.join(self.save_dir, fname)
+                try:
+                    os.remove(full)
+                    self.logger.info("Removed old intermediate checkpoint: {}".format(fname))
+                except OSError:
+                    pass
+
     def load(self, f=None):
 #         if self.has_checkpoint():
 #             # override argument with existing checkpoint
