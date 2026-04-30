@@ -32,12 +32,23 @@ def get_extensions():
         extension = CUDAExtension
         sources += source_cuda
         define_macros += [("WITH_CUDA", None)]
-        extra_compile_args["nvcc"] = [
+        nvcc_args = [
             "-DCUDA_HAS_FP16=1",
             "-D__CUDA_NO_HALF_OPERATORS__",
             "-D__CUDA_NO_HALF_CONVERSIONS__",
             "-D__CUDA_NO_HALF2_OPERATORS__",
         ]
+        # nvcc CUDA 12.1 chi support gcc <= 12. Tren Ubuntu 24.04 / Debian 13
+        # system gcc la 13/14 -> bao loi "unsupported GNU version". Neu user
+        # da set CUDAHOSTCXX (vd: gcc-12 trong conda env), ep nvcc dung cai do.
+        host_cxx = os.environ.get("CUDAHOSTCXX") or os.environ.get("CXX")
+        if host_cxx:
+            nvcc_args += ["-ccbin", host_cxx]
+        # Fallback: cho phep nvcc bo qua kiem tra version neu user khong cai
+        # gcc-12 (nguy hiem nhung tot hon la build fail; co the link error).
+        if os.environ.get("NVCC_ALLOW_UNSUPPORTED_COMPILER", "0") == "1":
+            nvcc_args.append("-allow-unsupported-compiler")
+        extra_compile_args["nvcc"] = nvcc_args
 
     sources = [os.path.join(extensions_dir, s) for s in sources]
 

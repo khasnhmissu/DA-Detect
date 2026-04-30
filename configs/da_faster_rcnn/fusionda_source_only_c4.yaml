@@ -21,18 +21,18 @@ DATASETS:
   TRAIN: ("fusionda_source_train_cocostyle",)
   TEST:  ("fusionda_target_test_cocostyle",)
 INPUT:
-  MIN_SIZE_TRAIN: (320,)
-  MAX_SIZE_TRAIN: 640
-  MIN_SIZE_TEST: 320
-  MAX_SIZE_TEST: 640
+  MIN_SIZE_TRAIN: (512,)
+  MAX_SIZE_TRAIN: 1024
+  MIN_SIZE_TEST: 512
+  MAX_SIZE_TEST: 1024
 SOLVER:
   BASE_LR: 0.001
   WEIGHT_DECAY: 0.0005
-  STEPS: (17000, 23000)         # decay ~60% va ~80% cua MAX_ITER
+  STEPS: (16800, 22400)         # decay ~60% va ~80% cua MAX_ITER
   MAX_ITER: 28000               # 40 epoch (2800 anh / batch 4 = 700 iter/epoch)
   IMS_PER_BATCH: 4
-  CHECKPOINT_PERIOD: 7000       # luu ckpt o iter 7k/14k/21k/28k
-  WARMUP_ITERS: 1500
+  CHECKPOINT_PERIOD: 7000       # luu ckpt moi 10 epoch (7k/14k/21k/28k)
+  WARMUP_ITERS: 700             # 1 epoch warmup
   WARMUP_LR: 0.0001
   LR_MIN: 0.000001
 TEST:

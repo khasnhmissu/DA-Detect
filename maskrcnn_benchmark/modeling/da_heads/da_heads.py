@@ -179,66 +179,61 @@ class DomainAdaptationModule_triplet(torch.nn.Module):
 
     
     def Adv_GRL(self,loss_iter, input_features, list_option=True):
+        # bce_threshold = BCE([[0.7,0.3]], [[1,0]]) ~ 0.6094 — nguong "discriminator da
+        # phan biet duoc"; khi current_loss tut xuong duoi day, kich hoat advGRL.
+        bce_threshold = F.binary_cross_entropy_with_logits(
+            torch.FloatTensor([[0.7, 0.3]]), torch.FloatTensor([[1, 0]])
+        ).item()
+        # loss_iter la CUDA tensor (scalar). Convert sang Python float ngay de tranh
+        # so sanh cross-device va de dung lam he so scalar cho GradientScalarLayer.
+        loss_val = loss_iter.detach().item() if torch.is_tensor(loss_iter) else float(loss_iter)
 
-        self.bce = F.binary_cross_entropy_with_logits(torch.FloatTensor([[0.7,0.3]]), torch.FloatTensor([[1,0]]))
-
-        if loss_iter <=  self.bce:
-            adv_threshold = min(self.advGRL_threshold, 1/loss_iter)
-            # self.advGRL_optimized = GradientScalarLayer(-1.0*self.cfg.MODEL.DA_HEADS.DA_IMG_advGRL_WEIGHT*adv_threshold)
-
-            if list_option:# for img_features (list[Tensor])
-                self.advGRL_optimized = GradientScalarLayer(-1.0*self.cfg.MODEL.DA_HEADS.DA_IMG_advGRL_WEIGHT*adv_threshold.numpy())
-                advgrl_fea = [ self.advGRL_optimized(fea) for fea in input_features]
-            else: # for da_ins_feature (Tensor)
-                self.advGRL_optimized = GradientScalarLayer(-1.0*self.cfg.MODEL.DA_HEADS.DA_INS_advGRL_WEIGHT*adv_threshold.numpy())
+        if loss_val <= bce_threshold:
+            adv_threshold = min(self.advGRL_threshold, 1.0 / loss_val)
+            if list_option:  # for img_features (list[Tensor])
+                self.advGRL_optimized = GradientScalarLayer(-1.0 * self.cfg.MODEL.DA_HEADS.DA_IMG_advGRL_WEIGHT * adv_threshold)
+                advgrl_fea = [self.advGRL_optimized(fea) for fea in input_features]
+            else:  # for da_ins_feature (Tensor)
+                self.advGRL_optimized = GradientScalarLayer(-1.0 * self.cfg.MODEL.DA_HEADS.DA_INS_advGRL_WEIGHT * adv_threshold)
                 advgrl_fea = self.advGRL_optimized(input_features)
         else:
-            if list_option:# for img_features (list[Tensor])
-                advgrl_fea = [self.grl_img(fea) for fea in input_features]###the original component
-            else: # for da_ins_feature (Tensor)
+            if list_option:
+                advgrl_fea = [self.grl_img(fea) for fea in input_features]
+            else:
                 advgrl_fea = self.grl_ins(input_features)
 
-        # print("Adv_GRL is used")
-        
         return advgrl_fea
-    
+
     def Adv_GRL_Optimized(self,loss_iter, input_features, list_option=True):
+        bce_min = F.binary_cross_entropy_with_logits(
+            torch.FloatTensor([[0.6, 0.4]]), torch.FloatTensor([[1, 0]])
+        ).item()  # ~0.6288
+        bce_max = F.binary_cross_entropy_with_logits(
+            torch.FloatTensor([[0.55, 0.45]]), torch.FloatTensor([[1, 0]])
+        ).item()  # ~0.6753
+        loss_val = loss_iter.detach().item() if torch.is_tensor(loss_iter) else float(loss_iter)
 
-        self.bce_min = F.binary_cross_entropy_with_logits(torch.FloatTensor([[0.6,0.4]]), torch.FloatTensor([[1,0]]))#0.6288
-        self.bce_max = F.binary_cross_entropy_with_logits(torch.FloatTensor([[0.55,0.45]]), torch.FloatTensor([[1,0]]))#0.6753
-        #[0.5, 0.5] = 0.7241, [0.9, 0.1] = 0.5428
-
-        if loss_iter <=  self.bce_min:
-
-            adv_threshold = min(self.advGRL_threshold, 1/loss_iter)
-            # self.advGRL_optimized = GradientScalarLayer(-1.0*self.cfg.MODEL.DA_HEADS.DA_IMG_advGRL_WEIGHT*adv_threshold)
-
-            if list_option:# for img_features (list[Tensor])
-                self.advGRL_optimized = GradientScalarLayer(-1.0*self.cfg.MODEL.DA_HEADS.DA_IMG_advGRL_WEIGHT*adv_threshold)
-                advgrl_fea = [ self.advGRL_optimized(fea) for fea in input_features]
-            else: # for da_ins_feature (Tensor)
-                self.advGRL_optimized = GradientScalarLayer(-1.0*self.cfg.MODEL.DA_HEADS.DA_INS_advGRL_WEIGHT*adv_threshold)
+        if loss_val <= bce_min:
+            adv_threshold = min(self.advGRL_threshold, 1.0 / loss_val)
+            if list_option:
+                self.advGRL_optimized = GradientScalarLayer(-1.0 * self.cfg.MODEL.DA_HEADS.DA_IMG_advGRL_WEIGHT * adv_threshold)
+                advgrl_fea = [self.advGRL_optimized(fea) for fea in input_features]
+            else:
+                self.advGRL_optimized = GradientScalarLayer(-1.0 * self.cfg.MODEL.DA_HEADS.DA_INS_advGRL_WEIGHT * adv_threshold)
                 advgrl_fea = self.advGRL_optimized(input_features)
-
-        elif loss_iter >=  self.bce_max:
-
-            adv_threshold = torch.tensor(0.1)
-            self.advGRL_optimized = GradientScalarLayer(-1.0*self.cfg.MODEL.DA_HEADS.DA_IMG_advGRL_WEIGHT*adv_threshold)
-
-            if list_option:# for img_features (list[Tensor])
-                # self.advGRL_optimized = GradientScalarLayer(-1.0*self.cfg.MODEL.DA_HEADS.DA_IMG_advGRL_WEIGHT*adv_threshold.numpy())
-                advgrl_fea = [ self.advGRL_optimized(fea) for fea in input_features]
-            else: # for da_ins_feature (Tensor)
-                # self.advGRL_optimized = GradientScalarLayer(-1.0*self.cfg.MODEL.DA_HEADS.DA_INS_advGRL_WEIGHT*adv_threshold.numpy())
+        elif loss_val >= bce_max:
+            adv_threshold = 0.1
+            self.advGRL_optimized = GradientScalarLayer(-1.0 * self.cfg.MODEL.DA_HEADS.DA_IMG_advGRL_WEIGHT * adv_threshold)
+            if list_option:
+                advgrl_fea = [self.advGRL_optimized(fea) for fea in input_features]
+            else:
                 advgrl_fea = self.advGRL_optimized(input_features)
         else:
-            if list_option:# for img_features (list[Tensor])
-                advgrl_fea = [self.grl_img(fea) for fea in input_features]###the original component
-            else: # for da_ins_feature (Tensor)
+            if list_option:
+                advgrl_fea = [self.grl_img(fea) for fea in input_features]
+            else:
                 advgrl_fea = self.grl_ins(input_features)
 
-        # print("Adv_GRL is used")
-        
         return advgrl_fea
 
     def Domainlevel_Img_component(self,img_fea_set):

@@ -98,6 +98,19 @@ def do_train(
 
         losses = sum(loss for loss in loss_dict.values())
 
+        # Skip step neu loss khong huu han (NaN/Inf) — tranh corrupt weight
+        if not torch.isfinite(losses):
+            logger.warning(
+                "Iter {}: loss = {}, skip backward+step (preserve weights)".format(
+                    iteration, losses.item() if losses.numel() == 1 else losses
+                )
+            )
+            optimizer.zero_grad()
+            batch_time = time.time() - end
+            end = time.time()
+            meters.update(time=batch_time, data=data_time)
+            continue
+
         # reduce losses over all GPUs for logging purposes
         loss_dict_reduced = reduce_loss_dict(loss_dict)
         losses_reduced = sum(loss for loss in loss_dict_reduced.values())
@@ -105,6 +118,10 @@ def do_train(
 
         optimizer.zero_grad()
         losses.backward()
+        # Clip gradient de tranh explosion (vd: spike loss tu triplet/DA heads).
+        # max_norm=10 du long de khong anh huong train binh thuong (grad norm thuong < 5)
+        # nhung chan duoc nhung spike >> 10 lam corrupt model.
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=10.0)
         optimizer.step()
 
         batch_time = time.time() - end
@@ -229,6 +246,22 @@ def do_da_train(
 
         losses = sum(loss for loss in loss_dict.values())
 
+        # Skip step neu loss khong huu han (NaN/Inf). Quan trong cho triplet:
+        # da gap spike triplet_loss_image (0 -> 0.85) gay loss explode -> NaN.
+        # Skip giu duoc weight tot nhat thay vi corrupt.
+        if not torch.isfinite(losses):
+            logger.warning(
+                "Iter {}: loss = {}, skip backward+step (preserve weights)".format(
+                    iteration, losses.item() if losses.numel() == 1 else losses
+                )
+            )
+            optimizer.zero_grad()
+            scheduler.step_update(iteration)
+            batch_time = time.time() - end
+            end = time.time()
+            meters.update(time=batch_time, data=data_time)
+            continue
+
         # reduce losses over all GPUs for logging purposes
         loss_dict_reduced = reduce_loss_dict(loss_dict)
         losses_reduced = sum(loss for loss in loss_dict_reduced.values())
@@ -236,8 +269,13 @@ def do_da_train(
 
         optimizer.zero_grad()
         losses.backward()
+        # Clip gradient de tranh explosion. Voi triplet loss + advGRL,
+        # gradient co the spike rat lon khi 1 batch trung triplet kho sau
+        # nhieu iter triplet=0; max_norm=10 chan duoc spike ma khong anh
+        # huong train binh thuong (grad norm thuong < 5).
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=10.0)
         optimizer.step()
-        
+
         # scheduler.step()
         scheduler.step_update(iteration)
 

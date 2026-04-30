@@ -54,18 +54,29 @@ echo "[6/8] target_test..."
 python tools/yolo2coco.py --img_dir "$TGT_TEST_IMG" --lbl_dir "$TGT_TEST_LBL" --out "$ANN/target_test.json"
 
 echo "[7/8] Sinh mien phu tro rainy tu source_train..."
-if [ ! -d "$ROOT/rainy_real/train/images" ]; then
+# Bien moi truong SKIP_RAINY=1 de bo qua sinh rainy (vd. khi chi train source_only).
+# Rainy chiem ~5.6GB nen tach rieng cho phep tiet kiem disk neu khong train triplet.
+if [ "${SKIP_RAINY:-0}" = "1" ]; then
+  echo "  SKIP_RAINY=1 -> bo qua sinh rainy_real/. (Chi can de train triplet)"
+elif [ ! -d "$ROOT/rainy_real/train/images" ]; then
   python tools/make_rainy.py --src_img "$SRC_TRAIN_IMG" --src_lbl "$SRC_TRAIN_LBL" --dst "$ROOT/rainy_real/train"
 else
-  echo "Da co $ROOT/rainy_real/train/images, bo qua."
+  echo "  Da co $ROOT/rainy_real/train/images, bo qua."
 fi
 
 echo "[8/8] rainy_train JSON..."
-python tools/yolo2coco.py \
-  --img_dir "$ROOT/rainy_real/train/images" \
-  --lbl_dir "$ROOT/rainy_real/train/labels" \
-  --out     "$ANN/rainy_train.json"
+if [ "${SKIP_RAINY:-0}" != "1" ] && [ -d "$ROOT/rainy_real/train/images" ]; then
+  python tools/yolo2coco.py \
+    --img_dir "$ROOT/rainy_real/train/images" \
+    --lbl_dir "$ROOT/rainy_real/train/labels" \
+    --out     "$ANN/rainy_train.json"
+else
+  echo "  Bo qua tao rainy_train.json (chua co rainy_real/)"
+fi
 
 echo ""
 echo "[DONE] Annotation JSON da tao:"
 ls -la "$ANN"
+echo ""
+echo "Disk usage:"
+du -sh datasets/* 2>/dev/null | sort -h

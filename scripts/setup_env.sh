@@ -38,23 +38,31 @@ else
 fi
 conda activate "$ENV_NAME"
 
-echo "[2/7] Cai PyTorch 2.2.2 + CUDA toolkit 12.1 (vao trong env, doc lap voi system)..."
-pip install --upgrade pip
-# Pin setuptools < 70 vi setuptools >= 80 da bo lenh `develop`.
-pip install "setuptools<70" wheel
+echo "[2/7] Cai PyTorch 2.2.2 + CUDA build tools 12.1 (toi thieu, tiet kiem disk)..."
+pip install --no-cache-dir --upgrade pip
+pip install --no-cache-dir "setuptools<70" wheel
 
-# Cai CUDA toolkit 12.1 vao trong env qua channel nvidia.
-# Bao gom nvcc, cudart, libraries-dev — du de build maskrcnn_benchmark extension.
-# Kich thuoc: ~3GB nhung tach roi system CUDA, tranh major version mismatch.
-echo "  Cai cuda-toolkit 12.1 vao env (~3GB, mat 2-3 phut)..."
-conda install -y -n "$ENV_NAME" -c "nvidia/label/cuda-12.1.0" cuda-toolkit
+# Cai NVCC + CUDA libraries dev (du cublas, curand, cusolver, cusparse cho PyTorch
+# build extension). Trung gian giua cuda-toolkit (3GB) va minimal (fail vi thieu cublas_v2.h).
+echo "  Cai cuda-nvcc + libraries-dev (~1.2GB, mat 2-3 phut)..."
+conda install -y -n "$ENV_NAME" -c "nvidia/label/cuda-12.1.0" \
+  cuda-nvcc cuda-cudart-dev cuda-cccl cuda-libraries-dev
 
-pip install torch==2.2.2 torchvision==0.17.2 --index-url https://download.pytorch.org/whl/cu121
+# QUAN TRONG: cai gcc/g++ 12 trong env. CUDA 12.1 nvcc tu choi gcc >= 13
+# (system Ubuntu 24.04 / Debian 13 mac dinh la gcc-13/14). Khong cai => build fail.
+echo "  Cai gcc-12/g++-12 (host compiler cho nvcc 12.1)..."
+conda install -y -n "$ENV_NAME" -c conda-forge \
+  "gcc_linux-64=12.*" "gxx_linux-64=12.*" "sysroot_linux-64>=2.17"
 
-echo "[3/7] Cai cac goi Python phu thuoc..."
-# pin numpy < 2 vi pycocotools/cv2 cu khong tuong thich numpy 2.x;
-# pin protobuf < 5 cho tensorboard
-pip install \
+# Don dep cache conda ngay sau install (tiet kiem 2-3GB)
+conda clean -afy
+
+# Cai PyTorch khong cache (tiet kiem ~2GB pip cache)
+pip install --no-cache-dir torch==2.2.2 torchvision==0.17.2 \
+  --index-url https://download.pytorch.org/whl/cu121
+
+echo "[3/7] Cai cac goi Python phu thuoc (no cache)..."
+pip install --no-cache-dir \
   "numpy<2" "protobuf<5" \
   ninja yacs==0.1.8 cython matplotlib tqdm \
   "opencv-python<4.10" timm scipy h5py \
@@ -76,12 +84,33 @@ export LD_LIBRARY_PATH="$CUDA_HOME/lib:$CUDA_HOME/lib64:${LD_LIBRARY_PATH:-}"
 echo "CUDA_HOME=$CUDA_HOME"
 nvcc --version 2>/dev/null | head -n4 || true
 
+# QUAN TRONG: ep nvcc dung gcc-12 trong env (khong dung system gcc 13+).
+# Conda goi gcc-12 la x86_64-conda-linux-gnu-gcc; 1 so phien ban activation script
+# tu set CC/CXX, nhung khong tin cay khi pip --no-build-isolation. Set thu cong.
+CONDA_CC="$(ls $CONDA_PREFIX/bin/x86_64-conda-linux-gnu-gcc 2>/dev/null || true)"
+CONDA_CXX="$(ls $CONDA_PREFIX/bin/x86_64-conda-linux-gnu-g++ 2>/dev/null || true)"
+if [ -z "$CONDA_CC" ] || [ -z "$CONDA_CXX" ]; then
+  echo "[ERROR] khong tim thay gcc-12/g++-12 trong $CONDA_PREFIX/bin." >&2
+  echo "  conda install -n $ENV_NAME -c conda-forge gcc_linux-64=12 gxx_linux-64=12" >&2
+  exit 1
+fi
+export CC="$CONDA_CC"
+export CXX="$CONDA_CXX"
+export CUDAHOSTCXX="$CONDA_CXX"   # nvcc -ccbin se dung cai nay
+echo "CC  = $CC ($($CC -dumpversion))"
+echo "CXX = $CXX ($($CXX -dumpversion))"
+
 # Xoa build cu de tranh cache mismatch
 rm -rf build maskrcnn_benchmark.egg-info
 pip install --no-build-isolation -e .
 
-echo "[6/7] Cai pycocotools tu nguon (neu pip wheel co loi)..."
-pip install --no-build-isolation "git+https://github.com/cocodataset/cocoapi.git#subdirectory=PythonAPI" 2>/dev/null || true
+echo "[6/7] Don dep cache cuoi cung..."
+# Tat ca cache khong can thiet sau khi install xong
+pip cache purge 2>/dev/null || true
+conda clean -afy 2>/dev/null || true
+rm -rf /tmp/pip-* /tmp/tmp* 2>/dev/null || true
+echo "  Disk usage cua env:"
+du -sh "$(conda info --envs | awk -v env="$ENV_NAME" '$1==env {print $NF}')" 2>/dev/null || true
 
 echo "[7/7] Smoke test..."
 python - <<'PY'
